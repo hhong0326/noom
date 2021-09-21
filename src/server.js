@@ -29,18 +29,36 @@ const server = http.createServer(app);
 // connection
 const wss = new WebSocket.Server({ server });
 
+// temp db
+const sockets = [];
+
 // event listen for wss server
 // socket = browser
 wss.on("connection", (socket) => {
+    sockets.push(socket);
+    // get in first
+    socket["nickname"] = "Anon";
     console.log("Connect to Browser ✅");
+    
     // socket event, not server
     // each browser who connected server
     socket.on("close", () => console.log("Disconnected from the Browser ❌"));
     socket.on("message", (message) => {
         const translatedMessageData = message.toString('utf8');
-        console.log(translatedMessageData);
+        const msg = JSON.parse(translatedMessageData);
+        
+        switch (msg.type) {
+            case "new_message":
+                sockets.forEach(s => {
+                    s.send(`${socket.nickname}: ${msg.payload}`);
+                });
+                break;
+            case "nickname":
+                //bcz socket is object, can save new variable(data)
+                socket["nickname"] = msg.payload;
+                break;        
+        }
     });
-    socket.send("hello!");
 })
 
 server.listen(3000, handleListen);
