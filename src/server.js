@@ -26,34 +26,64 @@ const handleListen = () => console.log(`Listening on http://localhost:3000`);
 const httpServer = http.createServer(app);
 const wsServer = SocketIO(httpServer);
 
+
+function publicRooms() {
+    // const sids = wsServer.sockets.adapter.sids;
+    // const rooms = wsServer.sockets.adapter.rooms;
+    const { sockets: { adapter: { sids, rooms }}} = wsServer;
+
+    const publicRooms = [];
+    rooms.forEach((_, key) => {
+        if (sids.get(key) === undefined) {
+            publicRooms.push(key);
+        }
+    });
+    
+    return publicRooms;
+}
+
+function countRoom(roomName) {
+    return wsServer.sockets.adapter.rooms.get(roomName)?.size;
+}
+
 wsServer.on("connection", (socket) => {
     // console.log(socket);
     // any event listen middleware
+    
+
     socket.onAny((event) => {
         console.log(`Socket Event: ${event}`);
     })
-    socket.on("enter_room", (roomName, done) => {
+    socket.on("enter_room", (nickName, roomName, done) => {
+        socket["nickname"] = nickName;
         // room feature
         socket.join(roomName);
         // console.log(socket.rooms);
-        done();
+        done(countRoom(roomName));
         // send msg everybody in the room except myself
-        socket.to(roomName).emit("welcome");
+        socket.to(roomName).emit("welcome", socket.nickname, countRoom(roomName));
         // setTimeout(() => {
         //     // Server execs front-end's callback function in browser
         //     done("hello");
         // }, 10000); 
+
+        wsServer.sockets.emit("room_change", publicRooms());
     });
 
     socket.on("disconnecting", () => {
-        socket.rooms.forEach(room => socket.to(room).emit("bye"))
+        socket.rooms.forEach(room => socket.to(room).emit("bye", socket.nickname, countRoom(room)-1))
+    });
+    socket.on("disconnect", () => {
+        wsServer.sockets.emit("room_change", publicRooms());
     });
 
     socket.on("new_message", (msg, room, done) => {
         
-        socket.to(room).emit("new_message", msg);
+        socket.to(room).emit("new_message", `${socket.nickname}: ${msg}`);
         done();
     });
+
+    socket.on("nickname", (nickname) => socket["nickname"] = nickname );
     
 });
 
