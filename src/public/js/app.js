@@ -5,6 +5,7 @@ const muteBtn = document.getElementById("mute");
 const cameraBtn = document.getElementById("camera");
 const camerasSelect = document.getElementById("cameras");
 const call = document.getElementById("call");
+const msgForm = call.querySelector("#myStream form");
 
 call.hidden = true;
 
@@ -13,6 +14,7 @@ let muted = false;
 let cameraOn = false;
 let roomName;
 let myPeerConnection;
+let myDataChannel;
 
 async function getMedia(deviceId) {
     const initialConstraints = {
@@ -63,6 +65,13 @@ async function getCameras() {
     } catch(e) {
         console.log(e);
     }
+}
+
+function addMessage(msg) {
+    const ul = call.querySelector("#myStream ul");
+    const li = document.createElement("li");
+    li.innerText = msg;
+    ul.appendChild(li);
 }
 
 function handleMuteClick() {
@@ -130,6 +139,12 @@ welcomeForm.addEventListener("submit", handleWelcomeSubmit);
 socket.on("welcome", async () => {
     // trigger to be able to do webRTC process
     // offer
+    myDataChannel = myPeerConnection.createDataChannel("chat");
+    myDataChannel.addEventListener("message", (event) => {
+        addMessage(event.data);
+    });
+    console.log("made data channel");
+    // offer
     console.log("Someone joined");
     const offer = await myPeerConnection.createOffer();
     myPeerConnection.setLocalDescription(offer);
@@ -139,6 +154,13 @@ socket.on("welcome", async () => {
 
 // guest
 socket.on("offer", async (offer) => {
+    
+    myPeerConnection.addEventListener("datachannel", (event) => {
+        myDataChannel = event.channel;
+        myDataChannel.addEventListener("message", (event) => {
+            addMessage(event.data);
+        });
+    });
     // answer
     console.log("received the offer");
     myPeerConnection.setRemoteDescription(offer);
@@ -146,6 +168,15 @@ socket.on("offer", async (offer) => {
     myPeerConnection.setLocalDescription(answer);
     socket.emit("answer", answer, roomName);
     console.log("sent the answer");
+});
+
+// need to fix about promise problem 
+msgForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = msgForm.querySelector("input");
+    myDataChannel.send(input.value);
+    addMessage(input.value);
+    input.value = "";
 });
 
 // host
